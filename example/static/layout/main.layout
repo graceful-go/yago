@@ -1,0 +1,12 @@
+<html>
+  <head>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link type="text/css" rel="stylesheet" href="/static/assets/css/base.css">
+    <title>个人工作台</title>
+  </head>
+  <body>
+    {{template "header" .}}
+    {{template "body" .}}
+    {{template "footer" .}}
+  </body>
+</html>

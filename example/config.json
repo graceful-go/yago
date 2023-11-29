@@ -1,0 +1,16 @@
+{
+    "server": {
+        "port": 8080
+    },
+    "distDir": "static/layout",
+    "base": {
+        "templates":[
+            "header.layout",
+            "body.layout",
+            "footer.layout"
+        ]
+    },
+    "renders": [
+        {"path":"/","templates":["main.layout"]}
+    ]
+}
