@@ -12,3 +12,9 @@ func WithConfig(yc *YagoConfig) Option {
 		y.yc = yc
 	}
 }
+
+func WithFuncs(funcName string, bindFunc interface{}) Option {
+	return func(y *Yago) {
+		y.bindFuncs[funcName] = bindFunc
+	}
+}

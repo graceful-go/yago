@@ -7,16 +7,17 @@ import (
 )
 
 type Yago struct {
-	yc     *YagoConfig
-	ys     *YagoServer
-	logger Logger
+	yc        *YagoConfig
+	ys        *YagoServer
+	logger    Logger
+	bindFuncs map[string]interface{}
 }
 
 func New(opts ...Option) (*Yago, error) {
 
 	logger := &DefaultLogger{}
 
-	y := &Yago{logger: logger}
+	y := &Yago{logger: logger, bindFuncs: make(map[string]interface{})}
 	for _, opt := range opts {
 		opt(y)
 	}
@@ -54,12 +55,12 @@ func (y *Yago) Start(ctx context.Context) error {
 }
 
 // RegisterRouter
-func (y *Yago) RegisterRouter(ctx context.Context, router string, handler Handler) error {
+func (y *Yago) RegisterTemplateRouter(ctx context.Context, router string, handler Handler) error {
 
 	tmpls := y.yc.GetBindTemplates(router)
 	method := y.yc.GetBindMethod(router)
 
-	render, err := NewRenderWithTemplates(tmpls)
+	render, err := NewRenderWithTemplates(tmpls, y.bindFuncs)
 	if err != nil {
 		y.logger.Log("[YagoServer] RegisterRouter fail with binding templates:", tmpls, "err is "+err.Error())
 		return err
