@@ -2,6 +2,7 @@ package yago
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -52,16 +53,32 @@ func (y *YagoServer) Handle(ctx *YagoContext) {
 		return
 	}
 
-	renderData, err := hd.Handle(ctx)
-	if err != nil {
-		y.logger.Log("[YagoServer] Handle HTTP Request fail for "+ctx.path, "logic handle fail")
-		return
-	}
+	switch ctx.Method() {
+	case http.MethodGet:
+		renderData, err := hd.Get(ctx)
+		if err != nil {
+			y.logger.Log("[YagoServer] Handle HTTP GET Request fail for "+ctx.path, "logic handle fail")
+			return
+		}
 
-	if err := render.Render(ctx, renderData); err != nil {
-		y.logger.Log("[YagoServer] Handle HTTP Request fail for "+ctx.path, "render fail"+err.Error())
+		if err := render.Render(ctx, renderData); err != nil {
+			y.logger.Log("[YagoServer] Handle HTTP Request fail for "+ctx.path, "render fail"+err.Error())
+			return
+		}
+		return
+	case http.MethodPost:
+		data, code := hd.Post(ctx)
+		if code != 0 {
+			y.logger.Loglnf("[YagoServer] Handle HTTP POST Request fail for %s, code: %d", ctx.path, code)
+			ctx.writeResponseStatus(code)
+			return
+		}
+		bs, _ := json.Marshal(data)
+		ctx.w.Write(bs)
 		return
 	}
+	y.logger.Log("[YagoServer] Handle HTTP Request fail for "+ctx.path, "handler not found")
+	ctx.writeResponseStatus(http.StatusNotFound)
 }
 
 func (y *YagoServer) FindHandler(path, method string) (h Handler, r *YagoRender, e error) {
