@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 )
 
@@ -131,12 +130,13 @@ func (y *YagoServer) ParseBody(r *http.Request) []byte {
 
 func (y *YagoServer) ParseQuery(ctx context.Context, query string) map[string]string {
 	r := make(map[string]string, 0)
-	for _, fieldString := range strings.Split(query, "&") {
-		fields := strings.Split(fieldString, "=")
-		if len(fields) != 2 {
-			continue
-		}
-		r[fields[0]] = fields[1]
+	values, err := url.ParseQuery(query)
+	if err != nil {
+		y.logger.Log("[YagoServer] ParseQuery fail for queryString: " + query)
+		return r
+	}
+	for k, v := range values {
+		r[k] = v[0]
 	}
 	return r
 }

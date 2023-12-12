@@ -1,0 +1,25 @@
+{{define "todo"}}
+<div id="todo-container">
+    <div id="todo-menu">
+        <span id="todo-menu-title">工作日志</span>
+        <span id="todo-menu-new" class="todo-menu-item"><i class="fa fa-bars"></i></span>
+        <span id="todo-menu-done" class="todo-menu-item"><i class="fa fa-star-o"></i></span>
+        <span id="todo-menu-todo" class="todo-menu-item"><i class="fa fa-check-square-o"></i></span>
+        <span id="todo-menu-all" class="todo-menu-item"><i class="fa fa-plus-circle"></i></span>
+    </div>
+    <div id="todo-list">
+        <div class="todo-list-item">
+            <div class="todo-list-item-show-container">
+                <span class="todo-list-item-date">12/01</span>
+                <span class="todo-list-item-title">完成理论课完成理论课完成理论课完成理论课完成理论课完成理论课完成理论课完成理论课完成理论课完成理论课完成理论课完成理论课</span>
+            </div>
+            <div class="todo-list-item-edit-container">
+                <span class="todo-list-item-edit todo-list-item-edit-active"><i class="fa fa-circle-o-notch"></i></span>
+                <span class="todo-list-item-edit"><i class="fa fa-trash-o"></i></span>
+                <span class="todo-list-item-edit"><i class="fa fa-check fa-fw"></i></span>
+                <span class="todo-list-item-edit"><i class="fa fa-star-o fa-fw"></i></span>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}

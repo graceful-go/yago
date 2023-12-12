@@ -1,0 +1,11 @@
+{{define "search"}}
+    <div id="body-search-container">
+        <div class="sc-searchbox">
+            <input required type="text" class="sc-searchbox-field" />
+            <div class="sc-searchbox-placeholder">
+                <i class="sc-searchbox-placeholder-icon fa fa-search"></i>
+                <p class="sc-searchbox-placeholder-text">Search for anything</p>
+            </div>
+        </div>
+    </div>
+{{end}}
