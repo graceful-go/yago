@@ -48,6 +48,14 @@ func (y *Yago) Start(ctx context.Context) error {
 		http.Handle(assetPath, fsHandler)
 		y.logger.Log("[YagoServer] Server Start fs handler for: ", assetPath)
 	}
+
+	if y.yc.Files.BaseDir != "" {
+		fsPath := "/" + y.yc.Files.BaseDir + "/"
+		fsHandler := http.StripPrefix(fsPath, http.FileServer(http.Dir("./"+y.yc.Files.BaseDir)))
+		http.Handle(fsPath, fsHandler)
+		y.logger.Log("[YagoServer] Server Start fs handler for: ", fsPath)
+	}
+
 	http.Handle("/", y.ys)
 	y.logger.Log("[YagoServer] Server Start page handler for: /")
 	y.logger.Log("[YagoServer] Server Startup at", y.yc.Server.Port)

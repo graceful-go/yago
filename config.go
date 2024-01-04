@@ -22,10 +22,15 @@ type YagoPageConfig struct {
 	PageLayouts []*PageLayoutConfig `json:"pageLayouts"`
 }
 
+type YagoFileConfig struct {
+	BaseDir string `json:"baseDir"`
+}
+
 // YagoConfig
 type YagoConfig struct {
 	Server *ServerConfig   `json:"server"`
 	Pages  *YagoPageConfig `json:"pages"`
+	Files  *YagoFileConfig `json:"files"`
 }
 
 func (y *YagoConfig) GetBindMethod(router string) string {
