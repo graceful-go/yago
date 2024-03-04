@@ -7,10 +7,25 @@ import (
 )
 
 type YagoContext struct {
-	path   string
-	query  map[string]string
-	body   []byte
-	method string
+	path string
+
+	// route is a part of req.Path
+	// eg: http://host:port/a/apidemo
+	// and route is /a, this is spectified by server option inition
+	// http Path is equals: route + serviceName
+	route string
+
+	// serviceName is a part of req.Path
+	// eg: http://host:port/a/apidemo
+	// and serviceName is apidemo, this is spectified by server option inition
+	// http Path is equals: route + serviceName
+	serviceName string
+
+	// query is http request query
+	query map[string]string
+
+	// body is http request body
+	body []byte
 
 	w http.ResponseWriter
 	r *http.Request
@@ -22,16 +37,14 @@ func (y *YagoContext) writeResponseStatus(code int) {
 	y.w.WriteHeader(code)
 }
 
-func (y *YagoContext) Method() string {
-	return y.method
+func (y *YagoContext) writeJson(data interface{}) {
+	bs, _ := json.Marshal(data)
+	y.w.Header().Set("Content-Type", "application/json")
+	y.w.Write(bs)
 }
 
-func (y *YagoContext) ParseBody(dst interface{}) error {
-	return json.Unmarshal(y.body, dst)
-}
-
-func (y *YagoContext) Body() []byte {
-	return y.body
+func (y *YagoContext) ServiceName() string {
+	return y.serviceName
 }
 
 func (y *YagoContext) Query(key string) string {

@@ -6,28 +6,32 @@ import (
 	"net/http"
 )
 
+// YagoConfig
+type YagoConfig struct {
+	Port    uint32 `json:"port" default:"8080"`
+	Timeout uint32 `json:"timeout" default:"1000"`
+}
+
+type YagoHandler interface {
+	Handler() http.Handler
+	Pattern() string
+	Type() string
+}
+
 type Yago struct {
-	yc        *YagoConfig
-	ys        *YagoServer
-	logger    Logger
-	bindFuncs map[string]interface{}
+	cfg      *YagoConfig
+	handlers []YagoHandler
+	logger   Logger
 }
 
 func New(opts ...Option) (*Yago, error) {
 
 	logger := &DefaultLogger{}
 
-	y := &Yago{logger: logger, bindFuncs: make(map[string]interface{})}
+	y := &Yago{logger: logger}
 	for _, opt := range opts {
 		opt(y)
 	}
-
-	ys := &YagoServer{}
-	ys.hds = make(map[string]Handler)
-	ys.renders = make(map[string]*YagoRender)
-	ys.c = y.yc.Server
-	ys.logger = logger
-	y.ys = ys
 
 	if err := y.check(); err != nil {
 		return nil, err
@@ -42,39 +46,12 @@ func (y *Yago) check() error {
 
 // Start will block current process and start up a http server
 func (y *Yago) Start(ctx context.Context) error {
-	if y.yc.Pages.AssetDir != "" {
-		assetPath := "/" + y.yc.Pages.AssetDir + "/"
-		fsHandler := http.StripPrefix(assetPath, http.FileServer(http.Dir("./"+y.yc.Pages.AssetDir)))
-		http.Handle(assetPath, fsHandler)
-		y.logger.Log("[YagoServer] Server Start fs handler for: ", assetPath)
+
+	for _, handler := range y.handlers {
+		http.Handle(handler.Pattern(), handler.Handler())
+		y.logger.Log("[YagoServer] Start server for: ", handler.Pattern(), "[Type]", handler.Type())
 	}
 
-	if y.yc.Files.BaseDir != "" {
-		fsPath := "/" + y.yc.Files.BaseDir + "/"
-		fsHandler := http.StripPrefix(fsPath, http.FileServer(http.Dir("./"+y.yc.Files.BaseDir)))
-		http.Handle(fsPath, fsHandler)
-		y.logger.Log("[YagoServer] Server Start fs handler for: ", fsPath)
-	}
-
-	http.Handle("/", y.ys)
-	y.logger.Log("[YagoServer] Server Start page handler for: /")
-	y.logger.Log("[YagoServer] Server Startup at", y.yc.Server.Port)
-	return http.ListenAndServe(fmt.Sprintf(":%d", y.ys.c.Port), nil)
-}
-
-// RegisterRouter
-func (y *Yago) RegisterTemplateRouter(ctx context.Context, router string, handler Handler) error {
-
-	tmpls := y.yc.GetBindTemplates(router)
-	method := y.yc.GetBindMethod(router)
-
-	render, err := NewRenderWithTemplates(tmpls, y.bindFuncs)
-	if err != nil {
-		y.logger.Log("[YagoServer] RegisterRouter fail with binding templates:", tmpls, "err is "+err.Error())
-		return err
-	}
-
-	y.logger.Log("[YagoServer] RegisterRouter succ with binding templates:", tmpls)
-
-	return y.ys.Register(router, method, handler, render)
+	y.logger.Log("[YagoServer] Server Startup at", y.cfg.Port)
+	return http.ListenAndServe(fmt.Sprintf(":%d", y.cfg.Port), nil)
 }
