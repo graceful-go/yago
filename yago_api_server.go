@@ -3,6 +3,7 @@ package yago
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -13,10 +14,10 @@ import (
 
 const (
 	CodeYagoAPISucc            int = 0
-	CodeYagoAPIReqReadError    int = -100
-	CodeYagoAPIReqParseError   int = -101
-	CodeYagoAPIInternalError   int = -102
-	CodeYagoAPIServiceNotFound int = -110
+	CodeYagoAPIReqReadError    int = -100004
+	CodeYagoAPIReqParseError   int = -100003
+	CodeYagoAPIInternalError   int = -100002
+	CodeYagoAPIServiceNotFound int = -100001
 )
 
 type YagoAPIWrapper struct {
@@ -26,11 +27,74 @@ type YagoAPIWrapper struct {
 }
 
 type YagoApiHandler struct {
-	handler YagoApiHandlerFunc
-	in      reflect.Type
+	fn  reflect.Value
+	in  reflect.Type
+	out reflect.Type
 }
 
-type YagoApiHandlerFunc func(ctx context.Context, req interface{}) (interface{}, error)
+func (y *YagoApiHandler) parse(bs []byte) (YagoMessage, error) {
+
+	param := reflect.New(y.in.Elem()).Interface()
+	if err := json.Unmarshal(bs, param); err != nil {
+		return nil, err
+	}
+	if p, ok := param.(YagoMessage); ok {
+		return p, nil
+	}
+	return nil, errors.New("marshal fail, not YagoMessage found")
+}
+
+func (y *YagoApiHandler) invoke(yc *YagoContext, in YagoMessage) (YagoMessage, error) {
+	outs := y.fn.Call([]reflect.Value{
+		reflect.ValueOf(yc),
+		reflect.ValueOf(in),
+	})
+	if len(outs) != 2 {
+		return nil, errors.New("unexpected error occour, response format error")
+	}
+
+	if err, ok := outs[1].Interface().(error); ok && err != nil {
+		return nil, err
+	}
+
+	if rsp, ok := outs[0].Interface().(YagoMessage); ok {
+		return rsp, nil
+	}
+
+	return nil, errors.New("unexpected error occour, response format error")
+}
+
+func (y *YagoApiHandler) init() error {
+
+	if numIn := y.fn.Type().NumIn(); numIn != 2 {
+		return errors.New("invalid handler implementation for yago api handler")
+	}
+
+	if !y.fn.Type().In(0).ConvertibleTo(reflect.TypeOf(&YagoContext{})) {
+		return errors.New("invalid handler implementation for yago api handler")
+	}
+
+	if !y.fn.Type().In(1).Implements(reflect.TypeOf(new(YagoMessage))) {
+		return errors.New("invalid handler implementation for yago api handler")
+	}
+
+	if numOut := y.fn.Type().NumOut(); numOut != 2 {
+		return errors.New("invalid handler implementation for yago api handler")
+	}
+
+	if !y.fn.Type().Out(0).Implements(reflect.TypeOf(new(YagoMessage))) {
+		return errors.New("invalid handler implementation for yago api handler")
+	}
+
+	if !y.fn.Type().Out(1).Implements(reflect.TypeOf(new(error))) {
+		return errors.New("invalid handler implementation for yago api handler")
+	}
+
+	y.in = y.fn.Type().In(1)
+	y.out = y.fn.Type().Out(0)
+
+	return nil
+}
 
 type YagoApiServerConfig struct {
 	Route   string
@@ -103,6 +167,7 @@ func (y *YagoApiServer) Handle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (y *YagoApiServer) invoke(yc *YagoContext) {
+
 	handler, ok := y.handlers[yc.serviceName]
 	if !ok {
 		y.logger.Loglnf("[YagoApiServer] Handle fail, handler not found for [%s], err: %s", yc.serviceName)
@@ -112,19 +177,20 @@ func (y *YagoApiServer) invoke(yc *YagoContext) {
 		})
 		return
 	}
-	param := reflect.New(handler.in.Elem()).Interface()
-	if err := json.Unmarshal(yc.body, param); err != nil {
+
+	param, err := handler.parse(yc.body)
+	if err != nil {
 		yc.writeJson(&YagoAPIWrapper{
 			Code: CodeYagoAPIReqParseError,
 			Msg:  "req param type not match",
 		})
 		return
 	}
-	rsp, err := handler.handler(yc, param)
+	rsp, err := handler.invoke(yc, param)
 	if err != nil {
 		yc.writeJson(&YagoAPIWrapper{
 			Code: CodeYagoAPIInternalError,
-			Msg:  "handle error",
+			Msg:  "invoke error",
 		})
 		return
 	}
@@ -139,21 +205,21 @@ func (y *YagoApiServer) Pattern() string {
 	return y.c.Route
 }
 
-func (y *YagoApiServer) Register(serviceName string, handler YagoApiHandlerFunc) {
+func (y *YagoApiServer) Register(serviceName string, handler interface{}) {
 
 	if _, ok := y.handlers[serviceName]; ok {
 		panic("duplicate service name registed:" + serviceName)
 	}
 
-	meta := reflect.ValueOf(handler)
-	if numIn := meta.Type().NumIn(); numIn != 1 {
-		panic("invalid handler implement for yago api handler")
+	if hType := reflect.TypeOf(handler); hType.Kind() != reflect.Func {
+		panic("handler is not yago handler func")
 	}
-	paramType := meta.Type().In(0)
 
 	h := &YagoApiHandler{
-		handler: handler,
-		in:      paramType,
+		fn: reflect.ValueOf(handler),
+	}
+	if err := h.init(); err != nil {
+		panic("invalid handler implementation for yago api handler")
 	}
 	y.handlers[serviceName] = h
 }
