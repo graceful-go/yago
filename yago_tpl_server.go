@@ -5,12 +5,11 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
-type YaogoTemplateHandler interface {
-	Handle(ctx *YagoContext) (data interface{}, err error)
-}
+type YaogoTemplateHandler func(ctx *YagoContext) (data interface{}, err error)
 
 type PageLayoutConfig struct {
 	ServiceName string   `json:"name"`
@@ -46,10 +45,15 @@ type YagoTemplateServer struct {
 }
 
 func NewYagoTemplateServer(c *YagoTemplateConfig) (*YagoTemplateServer, error) {
-	return &YagoTemplateServer{
+	yServer := &YagoTemplateServer{
 		c:         c,
 		bindFuncs: make(map[string]interface{}),
-	}, nil
+		logger:    &DefaultLogger{},
+		hds:       make(map[string]YaogoTemplateHandler),
+		renders:   make(map[string]*YagoRender),
+	}
+
+	return yServer, nil
 }
 
 // BindFuncs
@@ -69,14 +73,20 @@ func (y *YagoTemplateServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Path
 	method := r.Method
 
-	y.logger.Loglnf("[YagoTemplateServer] Handle HTTP Request for [%s] %s", method, p)
-
 	yc := &YagoContext{}
 	yc.path = p
 	yc.query = queryParams
 	yc.w = w
 	yc.r = r
 	yc.Context = ctx
+
+	fs := strings.Split(p, "/")
+	if len(fs) >= 3 {
+		yc.route = fs[1]
+		yc.serviceName = fs[2]
+	}
+
+	y.logger.Loglnf("[YagoTemplateServer] Handle HTTP Request for [%s] %s, service: %s", method, p, yc.serviceName)
 
 	y.Handle(yc)
 }
@@ -91,6 +101,8 @@ func (y *YagoTemplateServer) Handler() http.Handler {
 
 func (y *YagoTemplateServer) Handle(ctx *YagoContext) {
 
+	y.logger.Loglnf("[YagoTemplateServer] Handle request: %+v", ctx.query)
+
 	hd, render, err := y.findHandler(ctx.serviceName)
 	if err != nil {
 		y.logger.Loglnf("[YagoTemplateServer] Handle HTTP Request fail for [%s] %s", ctx.serviceName, ctx.path)
@@ -98,9 +110,15 @@ func (y *YagoTemplateServer) Handle(ctx *YagoContext) {
 		return
 	}
 
+	if hd == nil {
+		y.logger.Loglnf("[YagoTemplateServer] Handle HTTP Request fail for [%s] %s, empty handler", ctx.serviceName, ctx.path)
+		ctx.w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
 	switch ctx.r.Method {
 	case http.MethodGet:
-		renderData, err := hd.Handle(ctx)
+		renderData, err := hd(ctx)
 		if err != nil {
 			y.logger.Log("[YagoTemplateServer] Handle HTTP GET Request fail for "+ctx.path, "logic handle fail")
 			return
@@ -112,6 +130,7 @@ func (y *YagoTemplateServer) Handle(ctx *YagoContext) {
 		}
 		return
 	}
+
 	// case http.MethodPost:
 	// 	data, code := hd.Post(ctx)
 	// 	if code != 0 {

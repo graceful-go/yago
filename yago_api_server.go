@@ -2,6 +2,7 @@ package yago
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -39,7 +40,6 @@ type YagoApiServerConfig struct {
 type YagoApiServer struct {
 	c        *YagoApiServerConfig
 	handlers map[string]*YagoApiHandler
-	mux      *http.ServeMux
 	logger   Logger
 }
 
@@ -47,7 +47,7 @@ func NewYagoApiServer(c *YagoApiServerConfig) (*YagoApiServer, error) {
 	return &YagoApiServer{
 		c:        c,
 		handlers: make(map[string]*YagoApiHandler),
-		mux:      http.NewServeMux(),
+		logger:   &DefaultLogger{},
 	}, nil
 }
 
@@ -55,7 +55,9 @@ func (y *YagoApiServer) Type() string {
 	return "YagoApiServer"
 }
 
-func (y *YagoApiServer) Handle(w http.ResponseWriter, r *http.Request) {
+func (y *YagoApiServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+
+	y.logger.Loglnf("[YagoApiServer] recv request: %s", r.URL.Path)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(y.c.Timeout))
 	defer cancel()
@@ -103,9 +105,10 @@ func (y *YagoApiServer) Handle(w http.ResponseWriter, r *http.Request) {
 
 func (y *YagoApiServer) invoke(yc *YagoContext) {
 
-	handler, ok := y.handlers[yc.serviceName]
+	handler, ok := y.handlers[strings.TrimPrefix(yc.serviceName, y.c.Route)]
+
 	if !ok {
-		y.logger.Loglnf("[YagoApiServer] Handle fail, handler not found for [%s], err: %s", yc.serviceName)
+		y.logger.Loglnf("[YagoApiServer] Handle fail, handler not found for [%s]", yc.serviceName)
 		yc.writeJson(&YagoAPIWrapper{
 			Code: CodeYagoAPIServiceNotFound,
 			Msg:  "service not found",
@@ -133,30 +136,32 @@ func (y *YagoApiServer) invoke(yc *YagoContext) {
 }
 
 func (y *YagoApiServer) Handler() http.Handler {
-	return y.mux
+	return y
 }
 
 func (y *YagoApiServer) Pattern() string {
 	return y.c.Route
 }
 
-func (y *YagoApiServer) Register(serviceName string, handler interface{}) {
+func (y *YagoApiServer) Register(serviceName string, handler interface{}) error {
 
 	if _, ok := y.handlers[serviceName]; ok {
-		panic("duplicate service name registed:" + serviceName)
+		return errors.New("duplicate service name registed:" + serviceName)
 	}
 
 	if hType := reflect.TypeOf(handler); hType.Kind() != reflect.Func {
-		panic("handler is not yago handler func")
+		return errors.New("handler is not yago handler func")
 	}
 
 	h := &YagoApiHandler{
 		fn: reflect.ValueOf(handler),
 	}
 	if err := h.init(); err != nil {
-		panic("invalid handler implementation for yago api handler")
+		return errors.New("invalid handler implementation for yago api handler")
 	}
 	y.handlers[serviceName] = h
+	y.logger.Loglnf("[YagoApiServer] Register service succ for: %s/%s", y.Pattern(), serviceName)
+	return nil
 }
 
 func (y *YagoApiServer) parseQuery(query string) map[string]string {

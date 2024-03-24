@@ -9,26 +9,26 @@ func WithConfig(yc *YagoConfig) Option {
 	}
 }
 
-func WithFileServer(fsConfig *YagoFileServerConfig) Option {
+func WithFileServer(fsServer *YagoFileServer) Option {
 	return func(y *Yago) error {
-		fsServer, err := NewYagoFileServer(fsConfig)
-		if err != nil {
-			y.logger.Log("[YagoServer] Server start fail due to:", err.Error())
-			return err
-		}
 		y.handlers = append(y.handlers, fsServer)
+		y.paths[fsServer.Pattern()] = fsServer
 		return nil
 	}
 }
 
-func WithTemplateServer(tlConfig *YagoTemplateConfig) Option {
+func WithTemplateServer(tServer *YagoTemplateServer) Option {
 	return func(y *Yago) error {
-		fsServer, err := NewYagoTemplateServer(tlConfig)
-		if err != nil {
-			y.logger.Log("[YagoServer] Server start fail due to:", err.Error())
-			return err
-		}
-		y.handlers = append(y.handlers, fsServer)
+		y.handlers = append(y.handlers, tServer)
+		y.paths[tServer.Pattern()] = tServer
+		return nil
+	}
+}
+
+func WithApiServer(aServer *YagoApiServer) Option {
+	return func(y *Yago) error {
+		y.handlers = append(y.handlers, aServer)
+		y.paths[aServer.Pattern()] = aServer
 		return nil
 	}
 }
